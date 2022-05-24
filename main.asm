@@ -16,13 +16,16 @@ CONTENT_BUFFER_SIZE = 500
 
 ;;; data section
 .data
+caption_warning byte "Warning", 0DH, 0AH, 0
+hint_separator_1 byte "=========================================", 0DH, 0AH, 0
+hint_separator_2 byte "-------------error----------------", 0DH, 0AH, 0
 hint_filename byte "Enter the filename:", 0DH, 0AH, 0
 hint_search byte "To find string:", 0DH, 0AH, 0
 hint_replace byte "Replace with:", 0DH, 0AH, 0
 hint_error_open  byte "Could not open the file:(", 0DH, 0AH, 0
 hint_error_read  byte "Could not read the file:(", 0DH, 0AH, 0
 hint_error_write  byte "Could not write the file:(", 0DH, 0AH, 0
-hint_error_length  byte "string length exceeds", 0DH, 0AH, 0
+hint_error_length  byte "empty string or string length exceeds:(", 0DH, 0AH, 0
 hint_not_find  byte "Could not find the substring:(", 0DH, 0AH, 0
 hint_original  byte "Original:", 0DH, 0AH, 0
 hint_result  byte "Now:", 0DH, 0AH, 0
@@ -51,14 +54,21 @@ j         dword   ?             ; INDEX FOR "RESULT".
 .code
 main PROC	
 
+_begin:
 ; HINT FOR FILENAME INPUT
+	mov edx, offset hint_separator_1		; FOR: WriteString
+	call WriteString
 	mov edx, offset hint_filename		; FOR: WriteString
 	call WriteString
 
 ; RECORD THE FILENAME
+	mov eax, green +(black * 16)		; FOR: SetTextColor
+	call SetTextColor
 	mov ecx, SIZEOF str_filename_original	; FOR: ReadString
 	mov edx, offset str_filename_original	; FOR: ReadString
 	call ReadString
+	mov eax, white +(black * 16)		; FOR: SetTextColor
+	call SetTextColor
 	mov count_filename, eax
 
 ; OPEN THE FILE 
@@ -84,16 +94,19 @@ main PROC
 		NULL
 	;; CHECK FOR ERROR
 	JC _error_read_file		; IF ERROR
-
 	
-_1_close_file:
+; CLOSE FILE
 	invoke CloseHandle, handle_file
 	
 ; TEST
+	mov eax, black +(white * 16)		; FOR: SetTextColor
+	call SetTextColor
 	call	Crlf
 	mov edx, offset original		; FOR: WriteString
 	call WriteString
 	call	Crlf
+	mov eax, white +(black * 16)		; FOR: SetTextColor
+	call SetTextColor
 
 _input_find_str:
 ; HINT TO INPUT STRING "FIND"
@@ -103,18 +116,33 @@ _input_find_str:
 	call WriteString
 
 ; RECORD STRING "FIND"
+	mov eax, green +(black * 16)		; FOR: SetTextColor
+	call SetTextColor
 	mov ecx, SIZEOF str_find			; FOR: ReadString
 	mov edx, offset str_find			; FOR: ReadString
 	call ReadString
 	mov count_find, eax				; FOR: ReadString
+	mov eax, white +(black * 16)		; FOR: SetTextColor
+	call SetTextColor
 
-; CHECK IF ERROR ("FIND" < "ORIGINAL" IS NEEDED)
+; CHECK IF ERROR ("FIND" < "ORIGINAL" && "FIND" != NULL , IS NEEDED)
+	mov ebx, count_find
+	cmp ebx, 0
+	jz  _error_find_count
 	mov ebx, count_original
 	cmp ebx, count_find
-	Jnc _input_new_str
+	jnc _input_new_str
+_error_find_count:
 	;; IF ERROR
 	call	Crlf
 	mov edx, offset hint_error_length	; FOR: WriteString
+	call WriteString
+	invoke MessageBox,
+		NULL,
+		addr hint_error_length,
+		addr caption_warning,
+		MB_OK + MB_ICONSTOP
+	mov edx, offset hint_separator_2		; FOR: WriteString
 	call WriteString
 	jmp	_input_find_str
 
@@ -126,23 +154,35 @@ _input_new_str:
 	call WriteString
 
 ; RECORD THE NEW STRING "REPLACE"
+	mov eax, green +(black * 16)		; FOR: SetTextColor
+	call SetTextColor
 	mov ecx, SIZEOF str_replace			; FOR: ReadString
 	mov edx, offset str_replace			; FOR: ReadString
 	call ReadString
 	mov count_replace, eax				; FOR: ReadString
+	mov eax, white +(black * 16)		; FOR: SetTextColor
+	call SetTextColor
 
-; CHECK IF ERROR ("REPLACE" < "ORIGINAL" IS NEEDED)
+; CHECK IF ERROR (ONLY "REPLACE" < "ORIGINAL" IS NEEDED)
 	mov ebx, count_original
-	CMP ebx, count_replace
-	JNC _initial
+	cmp ebx, count_replace
+
+	jnc _initial
 	;; IF ERROR
 	call	Crlf
 	mov edx, offset hint_error_length		; FOR: WriteString
 	call WriteString
+	invoke MessageBox,
+		NULL,
+		addr hint_error_length,
+		addr caption_warning,
+		MB_OK + MB_ICONSTOP
+	mov edx, offset hint_separator_2		; FOR: WriteString
+	call WriteString
 	jmp	_input_new_str
 
 _initial:
-	   ; INITIALIZE "I" AND "J"
+	; INITIALIZE "I" AND "J"
      mov  i, offset original            ; "I" POINTS TO "ORIGINAL".
      mov  j, offset result              ; "J" POINTS TO "RESULT".
      ; SEARCH VARIABLE "FIND" AT CURRENT POSITION ("I").
@@ -150,10 +190,10 @@ _initial:
      lea  edi, str_find
      jmp _search
 _search:
-	   ;; RECORD POSTION NUM OF "ORIGINAL"
-	   inc	pos1		; POS1 UPDATE WITH "ORIGINAL" POINTER
+	;; RECORD POSTION NUM OF "ORIGINAL"
+	inc	pos1		; POS1 UPDATE WITH "ORIGINAL" POINTER
      ;; CHECK IF END OF "FIND".
-	   mov  al, [edi]          ; CURRENT CHAR OF VARIABLE "FIND".
+	mov  al, [edi]          ; CURRENT CHAR OF VARIABLE "FIND".
      cmp  al, 0		
      je   _match
      ; CHECK IF END OF "ORIGINAL".
@@ -162,7 +202,7 @@ _search:
      je   _check_count
      ; CONTINUE.   
      cmp  al, [edi]       ; CMP ORIGINAL[SI],FIND[DI].
-     jne  mismatch        ; JUMP IF CHAR NOT EQUAL.
+     jne  _mismatch        ; JUMP IF CHAR NOT EQUAL.
      inc  esi              ; NEXT CHAR OF "ORIGINAL".
      inc  edi              ; NEXT CHAR OF "FIND".
      jmp  _search          ; REPEAT (COMPARE NEXT CHAR).
@@ -171,7 +211,7 @@ _match:
     mov edx, pos1
     sub edx, count_find		; NOW, EDX == FIRST CHAR OF "FIND"
     dec edx				; FIRST INDEX OF ARRAY IS 0
-    mov eax, count	; FOR: WriteDec
+    mov eax, count
     mov set_pos_ori[eax * type set_pos_ori], edx		; SEND EDX TO ARRAY"SET_POS_ORI"
     ; SKIP "FIND" IN "ORIGINAL" AND SKIPPED ONE CHAR FORWARD (SO DECREASE).
     mov  i, esi          
@@ -187,7 +227,7 @@ _match:
     lea  edi, str_replace      
     jmp  _replace          
 _replace:
-	   ; "REPLACE" REPLACE IT IN "RESULT".
+	; "REPLACE" REPLACE IT IN "RESULT".
      mov  al, [edi]       ; CURRENT CHAR OF VARIABLE "REPLACE".
      ; CHECK IF END OF "REPLACE".
      cmp  al, 0
@@ -199,7 +239,7 @@ _replace:
 	inc  pos2			; RECORD POSTION NUM OF "RESULT"(UPDATE WITH "RESULT" POINTER)
      inc  edi             ; NEXT POSITION IN "REPLACE".
      jmp  _replace
-mismatch:
+_mismatch:
      ; APPEND CURRENT CHAR INTO "RESULT".
      mov  esi, i          ; CURRENT POSITION IN "ORIGINAL".
      mov  edi, j          ; CURRENT POSITION IN "RESULT".
@@ -231,11 +271,31 @@ _no_resub:
 	add eax, count_original
 	mov count_result, eax
 
+_check_count:
+; CHECK IF ERROR
+	cmp count, 0
+	jnz _print
+	;; IF NOT FIND
+	call	Crlf
+	mov edx, offset hint_not_find
+	call WriteString
+	invoke MessageBox,
+		NULL,
+		addr hint_not_find,
+		addr caption_warning,
+		MB_OK + MB_ICONEXCLAMATION
+	mov edx, offset hint_separator_2		; FOR: WriteString
+	call WriteString
+	jmp	_input_find_str
+
+_print:
 ; PRINT "ORIGINAL" CHAR BY CHAR
 	call Crlf
 	call Crlf
 	mov edx, offset hint_original		; FOR: WriteString
 	call WriteString
+	mov eax, black +(white * 16)		; FOR: SetTextColor
+	call SetTextColor
 	mov esi, 0		; RECORD INDEX OF "SET_POS_ORI", INDEX OF ARRAY BEGINS FROM 0
 	mov edi, count_original		; RECORD INDEX OF "ORIGINAL" (REVERSE)
 _print_ori:
@@ -264,7 +324,7 @@ _on_color_print_ori:
 	inc esi
 	jmp _check_print_ori
 _off_color_print_ori:
-	mov eax, white +(black * 16)		; FOR: SetTextColor
+	mov eax, black +(white * 16)		; FOR: SetTextColor
 	call SetTextColor
 	mov ah, 0							; FOR:WriteChar
 	mov al, original[ebx * type original]	; FOR:WriteChar
@@ -275,20 +335,28 @@ _check_print_ori:
 	; CHECK IF IS END OF "ORIGINAL"
 	cmp edi, 0
 	JNZ _print_ori
+	mov eax, white +(black * 16)		; FOR: SetTextColor
+	call SetTextColor
 
 ; PRINT COUNT OF "FIND"
-  call Crlf	
+	call Crlf	
 	call Crlf
 	mov edx, offset hint_count		; FOR: WriteString
 	call WriteString
-  mov eax, count		; FOR: WriteDec
+	mov eax, red +(black * 16)		; FOR: SetTextColor
+	call SetTextColor
+	mov eax, count		; FOR: WriteDec
 	call WriteDec
+	mov eax, white +(black * 16)		; FOR: SetTextColor
+	call SetTextColor
 
 ; PRINT "RESULT" CHAR BY CHAR		; SAME STRUCTURE
 	call Crlf
 	call Crlf
 	mov edx, offset hint_result		; FOR: WriteString
 	call WriteString
+	mov eax, black +(white * 16)		; FOR: SetTextColor
+	call SetTextColor
 	mov esi, 0		; RECORD INDEX OF "SET_POS_RES", INDEX OF ARRAY BEGINS FROM 0
 	mov edi, count_result		; RECORD INDEX OF "RESULT" (REVERSE)
 _print_res:
@@ -317,7 +385,7 @@ _on_color_print_res:
 	inc esi
 	jmp _check_print_res
 _off_color_print_res:
-	mov eax, white +(black * 16)		; FOR: SetTextColor
+	mov eax, black +(white * 16)		; FOR: SetTextColor
 	call SetTextColor
 	mov ah, 0							; FOR:WriteChar
 	mov al, result[ebx * type result]	; FOR:WriteChar
@@ -328,18 +396,9 @@ _check_print_res:
 	; CHECK IF IS END OF "RESULT"
 	cmp edi, 0
 	JNZ _print_res
+	mov eax, white +(black * 16)		; FOR: SetTextColor
+	call SetTextColor
 
-_check_count:
-; CHECK IF ERROR
-	cmp count, 0
-	jnz _write_file
-	;; IF NOT FIND
-	call	Crlf
-	mov edx, offset hint_not_find
-	call WriteString
-	jmp	_input_find_str
-
-_write_file:
 ; OPEN THE FILE (FOR WRITING)
 	invoke CreateFile,
 		addr str_filename_result,
@@ -376,20 +435,38 @@ _error_open_file:
 	call	Crlf
 	mov edx, offset hint_error_open	; FOR: WriteString
 	call WriteString
-	jmp	_quit
+	call	Crlf
+	invoke MessageBox,
+		NULL,
+		addr hint_error_open,
+		addr caption_warning,
+		MB_OK + MB_ICONSTOP
+	jmp	_begin
 
 _error_read_file:
 	invoke CloseHandle, handle_file	; CLOSE FILE
 	call	Crlf
 	mov edx, offset hint_error_read	; FOR: WriteString
 	call WriteString
-	jmp	_quit
+	call	Crlf
+	invoke MessageBox,
+		NULL,
+		addr hint_error_read,
+		addr caption_warning,
+		MB_OK + MB_ICONSTOP
+	jmp	_begin
 	
 _error_write_file:
 	invoke CloseHandle, handle_file	; CLOSE FILE
 	call	Crlf
 	mov edx, offset hint_error_write	; FOR: WriteString
 	call WriteString
+	call	Crlf
+	invoke MessageBox,
+		NULL,
+		addr hint_error_write,
+		addr caption_warning,
+		MB_OK + MB_ICONSTOP
 	jmp	_quit
 
 _quit:
