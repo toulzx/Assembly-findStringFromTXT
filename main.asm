@@ -373,6 +373,8 @@ _print_res:
 	call WriteChar
 	jmp _check_print_res
 _on_color_print_res:
+	cmp count_replace, 0			; IF RESULT = NULL, DO NOT SET COLOR
+	jz _off_color_print_res
 	mov eax, red +(white * 16)		; FOR: SetTextColor
 	call SetTextColor
 	mov ah, 0							; FOR:WriteChar
