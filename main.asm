@@ -30,6 +30,7 @@ hint_not_find  byte "Could not find the substring:(", 0DH, 0AH, 0
 hint_original  byte "Original:", 0DH, 0AH, 0
 hint_result  byte "Now:", 0DH, 0AH, 0
 hint_count  byte "Counts:", 0DH, 0AH, 0
+hint_exit   byte "Press any key to exit :)", 0DH, 0AH, 0
 handle_file HANDLE ?
 str_filename_original byte FILENAME_BUFFER_SIZE DUP(0)
 str_filename_result byte "result.txt", 0
@@ -259,17 +260,20 @@ _next:
      jne  _search          ; REPEAT (SEARCH "FIND" AGAIN).
 
 ; SPECIFIC THE LENGTH OF "RESULT"
+	mov ebx, count
 	mov eax, count_find
 	sub eax, count_replace
-	cmp eax, 0
-	jnc _no_resub
-	mov eax, count_replace
-	sub eax, count_find 
-_no_resub:
-	mov ebx, count
+	jnc _no_resub		; IF "FIND" - "REPLACE" >= 0, JUMP
+	neg eax
 	mul ebx
 	add eax, count_original
 	mov count_result, eax
+	jmp _check_count
+_no_resub:
+	mul ebx
+	mov edx, count_original
+	sub edx, eax
+	mov count_result, edx
 
 _check_count:
 ; CHECK IF ERROR
@@ -473,6 +477,10 @@ _error_write_file:
 
 _quit:
 	call	Crlf
+	call	Crlf
+	mov edx, offset hint_exit	; FOR: WriteString
+	call WriteString
+	call ReadChar
 	invoke ExitProcess, 0
 
 
